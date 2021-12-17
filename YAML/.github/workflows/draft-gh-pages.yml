@@ -1,0 +1,71 @@
+name: GitHub Pages
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit_id:
+        description: The branch, tag or SHA of the submodule to checkout.
+        required: false
+        default:
+  push:
+    branches:
+      - master
+
+jobs:
+  deploy:
+    runs-on: ubuntu-20.04
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          token: ${{ secrets.MY_GITHUB_TOKEN }}
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Checkout submodule with github token
+        if: ${{ github.event.inputs.commit_id != '' }}
+        uses: actions/checkout@v2
+        with:
+          repository: dnasdw/pages_draft
+          path: pages_draft
+          ref: ${{ github.event.inputs.commit_id }}
+          token: ${{ secrets.MY_GITHUB_TOKEN }}
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Get full commit message like peaceiris/actions-gh-pages@v3
+        working-directory: ./pages_draft
+        run: |
+            printf -v FULL_COMMIT_MESSAGE %s "$(git log -1 --pretty=format:%B) dnasdw/pages_draft@$(git log -1 --pretty=format:%H)"
+            echo "$FULL_COMMIT_MESSAGE"
+            echo "FULL_COMMIT_MESSAGE<<EOF" >> $GITHUB_ENV
+            echo "$FULL_COMMIT_MESSAGE" >> $GITHUB_ENV
+            echo "EOF" >> $GITHUB_ENV
+
+      - name: Disable quotePath
+        working-directory: ./pages_draft
+        run: git config core.quotePath false
+
+      - name: Setup Hugo
+        uses: peaceiris/actions-hugo@v2
+        with:
+          hugo-version: latest
+          extended: true
+
+      - name: Build
+        working-directory: ./pages_draft
+        run: hugo --minify
+
+      - name: Deploy
+        uses: peaceiris/actions-gh-pages@v3
+        if: ${{ github.ref == 'refs/heads/master' }}
+        with:
+          personal_token: ${{ secrets.MY_GITHUB_TOKEN }}
+          external_repository: dnasdw/draft
+          publish_branch: gh-pages
+          publish_dir: ./pages_draft/public
+          force_orphan: false
+          user_name: Sun Daowen
+          user_email: sundaowen@gmail.com
+          full_commit_message: ${{ env.FULL_COMMIT_MESSAGE }}
