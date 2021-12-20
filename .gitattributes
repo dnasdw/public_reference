@@ -1,0 +1,6 @@
+* text=auto
+
+*.bat text working-tree-encoding=CP936 eol=CRLF
+
+# UTF-16LE-BOM
+*.reg binary
