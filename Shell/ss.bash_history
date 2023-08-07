@@ -1,6 +1,29 @@
-wget -O install.sh http://download.bt.cn/install/install-ubuntu_6.0.sh && sudo bash install.sh
+#passwd
+#cp /etc/apt/sources.list /etc/apt/sources.list.bak
+#sudo tee /etc/apt/sources.list << EOF
+#deb https://mirrors.aliyun.com/ubuntu/ focal main restricted universe multiverse
+#deb-src https://mirrors.aliyun.com/ubuntu/ focal main restricted universe multiverse
+#
+#deb https://mirrors.aliyun.com/ubuntu/ focal-security main restricted universe multiverse
+#deb-src https://mirrors.aliyun.com/ubuntu/ focal-security main restricted universe multiverse
+#
+#deb https://mirrors.aliyun.com/ubuntu/ focal-updates main restricted universe multiverse
+#deb-src https://mirrors.aliyun.com/ubuntu/ focal-updates main restricted universe multiverse
+#
+## deb https://mirrors.aliyun.com/ubuntu/ focal-proposed main restricted universe multiverse
+## deb-src https://mirrors.aliyun.com/ubuntu/ focal-proposed main restricted universe multiverse
+#
+#deb https://mirrors.aliyun.com/ubuntu/ focal-backports main restricted universe multiverse
+#deb-src https://mirrors.aliyun.com/ubuntu/ focal-backports main restricted universe multiverse
+#EOF
+wget -O install.sh https://download.bt.cn/install/install-ubuntu_6.0.sh && sudo bash install.sh
 
-sudo apt update && sudo apt upgrade && sudo apt autoremove
+sudo apt update && sudo apt upgrade -y && sudo apt autoremove
+cat > /etc/apt/apt.conf.d/99force-ipv4 << EOF
+Acquire::ForceIPv4 "true";
+Acquire::Retries "100";
+Acquire::http::Timeout "60";
+EOF
 sudo apt-get install -y software-properties-common
 sudo add-apt-repository -y ppa:fsgmhoward/shadowsocks-libev
 sudo apt update
@@ -29,11 +52,12 @@ sudo sed -i 's/listen \[::\]:80 default_server;//g'  /etc/nginx/sites-enabled/de
 sudo systemctl restart nginx
 sudo ss -anp | grep nginx
 sudo systemctl start shadowsocks-libev-server@config
+#dd if=/dev/urandom of=/var/www/html/100M.bin bs=1M count=100
 sudo add-apt-repository ppa:damentz/liquorix && sudo apt-get update
 sudo apt-get install -y linux-image-liquorix-amd64 linux-headers-liquorix-amd64
-sudo apt-mark hold linux-image-liquorix-amd64 linux-headers-liquorix-amd64
+#sudo apt-mark hold linux-image-liquorix-amd64 linux-headers-liquorix-amd64
 sudo tee -a /etc/sysctl.conf << EOF
-# 优化网络，使用BBRv2，开启TCP fast open，开启ECN、cake
+# 优化网络，使用BBR，开启TCP fast open，开启ECN、cake
 
 
 # max open files
@@ -70,10 +94,10 @@ net.ipv4.tcp_wmem = 4096 65536 67108864
 net.ipv4.tcp_mtu_probing = 1
 
 
-net.ipv4.tcp_allowed_congestion_control = hybla cubic reno lp bbr2
+net.ipv4.tcp_allowed_congestion_control = cubic reno bbr
 
 
-net.ipv4.tcp_congestion_control = bbr2
+net.ipv4.tcp_congestion_control = bbr
 
 
 # https://www.bufferbloat.net/projects/codel/wiki/CakeFAQ/
@@ -105,33 +129,32 @@ net.ipv4.tcp_fastopen_blackhole_timeout_sec = 0
 net.ipv4.tcp_keepalive_probes = 3
 EOF
 sudo reboot
-sysctl net.ipv4.tcp_congestion_control | grep bbr2
-sudo apt-get install -y unattended-upgrades
-sudo dpkg-reconfigure --priority=low unattended-upgrades
-sudo tee /usr/local/bin/upgrade_ss << EOF
-#!/bin/sh
-
-apt update
-apt upgrade -y
-apt autoremove -y
-systemctl restart shadowsocks-libev-server@config
-EOF
-sudo chmod +x /usr/local/bin/upgrade_ss
-sudo tee /etc/cron.daily/upgrade_ss << EOF
-#!/bin/sh
-
-logger upgrading shadowsocks
-/usr/local/bin/upgrade_ss
-EOF
-sudo chmod +x /etc/cron.daily/upgrade_ss
+sysctl net.ipv4.tcp_congestion_control | grep bbr
+#sudo apt-get install -y unattended-upgrades
+#sudo dpkg-reconfigure --priority=low unattended-upgrades
+#sudo tee /usr/local/bin/upgrade_ss << EOF
+##!/bin/sh
+#
+#apt update
+#apt upgrade -y
+#apt autoremove -y
+#systemctl restart shadowsocks-libev-server@config
+#EOF
+#sudo chmod +x /usr/local/bin/upgrade_ss
+#sudo tee /etc/cron.daily/upgrade_ss << EOF
+##!/bin/sh
+#
+#logger upgrading shadowsocks
+#/usr/local/bin/upgrade_ss
+#EOF
+#sudo chmod +x /etc/cron.daily/upgrade_ss
 sudo apt-get install -y sshguard
 sudo tee /etc/rc.local << EOF
 #!/bin/sh
-
-
+PATH=$PATH:/usr/sbin
 iptables -t nat -A PREROUTING -i eth0 -p tcp -m multiport --dports 8000:9000 -j REDIRECT --to-ports 80
 EOF
-chmod +x /etc/rc.local
+sudo chmod +x /etc/rc.local
 sudo tee /etc/systemd/system/rc-local.service << EOF
 [Unit]
  Description=/etc/rc.local Compatibility
@@ -152,13 +175,3 @@ sudo tee /etc/systemd/system/rc-local.service << EOF
 EOF
 sudo systemctl enable rc-local
 sudo reboot
-
-mkdir -p /www/server/nginx/sbin
-cd /www/server/nginx/sbin/
-type nginx
-ln -s /usr/sbin/nginx nginx
-mkdir -p /www/server/nginx/conf
-sudo tee /www/server/nginx/conf/nginx.conf << EOF
-events {
-}
-EOF
